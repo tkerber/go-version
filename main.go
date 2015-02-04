@@ -30,6 +30,7 @@ func generateGit(pkg string, out io.Writer) {
 	shortHash := cmd("git rev-parse --short HEAD")
 	longHash := cmd("git rev-parse HEAD")
 	tag := cmd("git describe --abbrev=0 --tags")
+	tagExact := cmd("git describe --exact-match --abbrev=0 --tags")
 	dateStr := cmd("git show -s --format=%ct")
 	dateUnix, err := strconv.ParseInt(dateStr, 0, 64)
 	if err != nil {
@@ -40,13 +41,14 @@ func generateGit(pkg string, out io.Writer) {
 import "time"
 
 const (
-	CommitHashShort = %#v
-	CommitHashLong  = %#v
-	CommitTag       = %#v
+	CommitHashShort  = %#v
+	CommitHashLong   = %#v
+	CommitTag        = %#v
+	CommitTagIsExact = %#v
 )
 
 var CommitDate = time.Unix(%#v, 0)
-`, pkg, shortHash, longHash, tag, dateUnix)))
+`, pkg, shortHash, longHash, tag, (tag == tagExact) && tag != "", dateUnix)))
 }
 
 // generateBzr generates the version file for bazaar.
@@ -65,24 +67,29 @@ func generateBzr(pkg string, out io.Writer) {
 	tagsStr := cmd("bzr tags --sort=time")
 	tags := strings.SplitN(tagsStr, "\n", 2)
 	// First group is the tag name
-	re := regexp.MustCompile(`^(.*)\s+\S+$`)
+	re := regexp.MustCompile(`^(.*)\s+(\S+)$`)
 	match := re.FindStringSubmatch(tags[0])
 	tag := ""
-	if match != nil && len(match) >= 2 {
+	tagExactMatch := false
+	if match != nil && len(match) >= 3 {
 		tag = match[1]
+		if match[2] == revnoStr {
+			tagExactMatch = true
+		}
 	}
 	out.Write([]byte(fmt.Sprintf(`package %s
 
 import "time"
 
 const (
-	RevNo      = %#v
-	RevisionId = %#v
-	CommitTag  = %#v
+	RevNo            = %#v
+	RevisionId       = %#v
+	CommitTag        = %#v
+	CommitTagIsExact = %#v
 )
 
 var CommitDate = time.Unix(%#v, 0)
-`, pkg, revno, revisionId, tag, date.Unix())))
+`, pkg, revno, revisionId, tag, tagExactMatch, date.Unix())))
 }
 
 // generateHg generates the version file for mercurial.
@@ -93,6 +100,7 @@ func generateHg(pkg string, out io.Writer) {
 		dateUnix = 0
 	}
 	tag := cmd("hg heads . -T {latesttag}")
+	tagIsExact := cmd("hg heads . -T {latesttagdistance}") == "1"
 	revStr := cmd("hg heads . -T {rev}")
 	revNo, err := strconv.ParseInt(revStr, 0, 64)
 	if err != nil {
@@ -104,13 +112,14 @@ func generateHg(pkg string, out io.Writer) {
 import "time"
 
 const (
-	CommitTag  = %#v
-	RevNo      = %#v
-	CommitHash = %#v
+	CommitTag        = %#v
+	CommitTagIsExact = %#v
+	RevNo            = %#v
+	CommitHash       = %#v
 )
 
 var CommitDate = time.Unix(%#v, 0)
-`, pkg, tag, revNo, hash, int(dateUnix))))
+`, pkg, tag, tagIsExact, revNo, hash, int(dateUnix))))
 }
 
 // A repo is a type of repository.
