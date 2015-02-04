@@ -123,6 +123,8 @@ const (
 	hg
 )
 
+// repoType gets the type of repository, or returns false if no repository
+// was found.
 func repoType(dir string) (repo, bool) {
 	if _, err := os.Stat(filepath.Join(dir, ".git")); !os.IsNotExist(err) {
 		return git, true
@@ -140,11 +142,17 @@ func repoType(dir string) (repo, bool) {
 	}
 }
 
+// main generates the version file.
 func main() {
 	outfile := flag.String("o", "./version.go", "The output file to generate.")
 	pkg := flag.String("pkg", "main", "The package of the output file.")
 	flag.Parse()
 	wd, err := os.Getwd()
+	if err != nil {
+		os.Stderr.WriteString(err.Error() + "\n")
+		os.Exit(1)
+	}
+	err = os.MkdirAll(filepath.Dir(*outfile), 0777)
 	if err != nil {
 		os.Stderr.WriteString(err.Error() + "\n")
 		os.Exit(1)
